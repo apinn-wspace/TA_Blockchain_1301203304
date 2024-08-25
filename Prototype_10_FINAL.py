@@ -1,10 +1,10 @@
 import streamlit as st
 import base64
 import hashlib
+import time
 from PIL import Image
 from io import BytesIO
 from datetime import datetime as dt  # Import the datetime class
-import time
 
 # Define your Block and Blockchain classes here
 class Block:
@@ -55,6 +55,14 @@ class Blockchain:
 if 'blockchain' not in st.session_state:
     st.session_state.blockchain = Blockchain()
 
+# Initialize execution times list in session state
+if 'execution_times' not in st.session_state:
+    st.session_state.execution_times = []
+
+# Initialize verification times
+if 'verification_times' not in st.session_state:
+    st.session_state.verification_times = []
+
 # Blockchain Management Functions
 def blockchain_page():
     st.title("Blockchain Voting Management")
@@ -67,35 +75,6 @@ def blockchain_page():
         combined_data = f"{data}"
         st.session_state.blockchain.add_block(combined_data)
         st.success("Data added to the blockchain")
-
-# Function to test data integrity
-def test_data_integrity():
-    st.title("Test Data Integrity")
-
-    if len(st.session_state.blockchain.chain) > 1:
-        # Tamper with the blockchain data
-        tamper_index = st.number_input("Enter the index of the block to tamper with", min_value=1, max_value=len(st.session_state.blockchain.chain)-1, value=1)
-        tampered_data = st.text_input("Enter new data for the tampered block")
-
-        if st.button("Tamper with Block"):
-            st.session_state.blockchain.tamper_block(tamper_index, tampered_data)
-            st.write(f"Block at index {tamper_index} has been tampered with.")
-
-        if st.button("Verify Blockchain Integrity"):
-            start_time = time.perf_counter()
-            integrity_status = st.session_state.blockchain.verify_integrity()
-            
-            if integrity_status:
-                st.success("Blockchain integrity is intact.")
-            else:
-                st.error("Blockchain integrity has been compromised.")
-            
-            end_time = time.perf_counter()
-            verification_time = end_time - start_time
-            
-            st.write(f"Time taken to verify blockchain integrity: {verification_time:.4f} seconds")
-    else:
-        st.write("Not enough blocks to tamper with. Please add more blocks to the blockchain.")
 
 # Function to register a candidate
 def registerCandidate(candidate_data, candidateName, candidateID, candidateGPA, candidatePhoto, candidateVision, candidateMission):
@@ -142,52 +121,6 @@ def registerCandidate(candidate_data, candidateName, candidateID, candidateGPA, 
     }
     st.success(f"Candidate {candidateName} with ID {candidateID} registered successfully at {current_time}.")
 
-# Function to vote for a candidate
-def voteCandidate(voter_data, candidate_data, blockchain, voterName, voterID, voterClass, voterContact, selected_candidate):
-    current_time = dt.now().strftime("%Y-%m-%d %H:%M:%S")  # Get the current timestamp
-
-    # Check if the selected candidate is valid
-    if selected_candidate not in candidate_data:
-        st.error("Invalid candidate selected. Please choose a candidate from the registered candidates.")
-        return
-
-    # Check if the voterName already exists
-    if any(voterName.lower() == voter_data[voterID]['voterName'].lower() for voterID in voter_data):
-        st.error("Your name already registered. You can only vote once.")
-        return
-
-    # Check if the voterID already exists
-    if voterID in voter_data:
-        st.error("Your ID already registered. You can only vote once.")
-        return
-    
-    # Check if candidateID length is 10
-    if len(voterID) != 10:
-        st.error("Voter ID must be 10 characters long.")
-        return
-
-    # Check if the voterContact already exists
-    if any(voterContact.lower() == voter_data[voterID]['voterContact'].lower() for voterID in voter_data):
-        st.error("Your phone number already registered. You can only vote once.")
-        return
-
-    # Add the vote to the data with the timestamp
-    voter_data[voterID] = {
-        'voterName': voterName,
-        'voterClass': voterClass,
-        'voterContact': voterContact,
-        'selectedCandidate': selected_candidate,
-        'timestamp': current_time  # Save the vote timestamp
-    }
-
-    # Create a string representation of the vote data
-    vote_data_str = f"Vote : {voterName} ({voterID}) voted for {candidate_data[selected_candidate]['candidateName']} at {current_time}"
-
-    # Add the vote data to the blockchain
-    blockchain.add_block(vote_data_str)
-
-    st.success(f"Vote cast successfully")
-
 # Function to show all registered candidates
 def showRegisteredCandidates(candidate_data):
     st.header("Registered Candidates")
@@ -216,6 +149,85 @@ def showRegisteredCandidates(candidate_data):
                 st.write(f"**Timestamp :** {data.get('timestamp', 'N/A')}")
                 st.write("------")
 
+# Function to vote for a candidate
+def voteCandidate(voter_data, candidate_data, blockchain, voterName, voterID, voterClass, voterContact, selected_candidate):
+    current_time = dt.now().strftime("%Y-%m-%d %H:%M:%S")  # Get the current timestamp
+    
+    # Measure execution time with higher precision
+    start_time = time.perf_counter()
+
+    # Check if the selected candidate is valid
+    if selected_candidate not in candidate_data:
+        st.error("Invalid candidate selected. Please choose a candidate from the registered candidates.")
+        return
+
+    # Check if the voterName already exists
+    if any(voterName.lower() == voter_data[voter]['voterName'].lower() for voter in voter_data):
+        st.error("Your name is already registered. You can only vote once.")
+        return
+
+    # Check if the voterID already exists
+    if voterID in voter_data:
+        st.error("Your ID is already registered. You can only vote once.")
+        return
+    
+    # Check if voterID length is 10
+    if len(voterID) != 10:
+        st.error("Voter ID must be 10 characters long.")
+        return
+
+    # Check if the voterContact already exists
+    if any(voterContact.lower() == voter_data[voter]['voterContact'].lower() for voter in voter_data):
+        st.error("Your phone number is already registered. You can only vote once.")
+        return
+
+    # Add the vote to the data with the timestamp
+    voter_data[voterID] = {
+        'voterName': voterName,
+        'voterClass': voterClass,
+        'voterContact': voterContact,
+        'selectedCandidate': selected_candidate,
+        'timestamp': current_time  # Save the vote timestamp
+    }
+
+    # Create a string representation of the vote data
+    vote_data_str = f"Vote : {voterName} ({voterID}) voted for {candidate_data[selected_candidate]['candidateName']} at {current_time}"
+
+    # Add the vote data to the blockchain
+    blockchain.add_block(vote_data_str)
+
+    st.success(f"Vote cast successfully")
+
+    # Calculate and display the execution time
+    end_time = time.perf_counter()
+    execution_time = end_time - start_time
+    st.session_state.execution_times.append(execution_time)
+    st.write(f"\nExecution Time: {execution_time:.6f} seconds")
+
+# Function to show data that added to Blockchain
+def view_blockchain_page():
+    st.header("View Blockchain Data")
+
+    # Add authentication inputs
+    username = st.text_input("Enter Username:", type="password")
+    password = st.text_input("Enter Password:", type="password")
+
+    # Hardcoded example username and password (replace with your authentication logic)
+    valid_username = "admin"
+    valid_password = "admin"
+
+    if st.button("Authenticate"):
+        if username == valid_username and password == valid_password:
+            # Display blockchain data only if authentication is successful
+            for blockchainData, timestamp, block_hash, prev_hash in st.session_state.blockchain.get_blocks():
+                st.write(f"Blockchain data :\n\n {blockchainData}")
+                st.write(f"Timestamp : {timestamp}")
+                st.write(f"Hash : {block_hash}")
+                st.write(f"Previous Hash : {prev_hash or 'None'}")
+                st.write("-----")  # Separator for each block
+        else:
+            st.error("Authentication failed. Please check your username and password.")
+
 # Function to determine and display the winner and other candidates
 def showResults(candidate_data, voter_data):
     st.header("Election Results")
@@ -243,30 +255,56 @@ def showResults(candidate_data, voter_data):
             candidate_name = data['candidateName']
             vote_count = candidate_votes[candidateID]
             st.write(f"{candidate_name} : {vote_count} votes")
+            
+# Function to view execution times
+def view_execution_times():
+    st.header("View Voting Execution Times")
 
-# Function to show data that added to Blockchain
-def view_blockchain_page():
-    st.header("View Blockchain Data")
+    if not st.session_state.execution_times:
+        st.info("No voting execution times recorded yet.")
+    else:
+        for idx, exec_time in enumerate(st.session_state.execution_times, 1):
+            st.write(f"Vote {idx}: {exec_time:.6f} seconds")
 
-    # Add authentication inputs
-    username = st.text_input("Enter Username:", type="password")
-    password = st.text_input("Enter Password:", type="password")
+# Function to test data integrity
+def test_data_integrity():
+    st.title("Test Data Integrity")
 
-    # Hardcoded example username and password (replace with your authentication logic)
-    valid_username = "admin"
-    valid_password = "admin"
+    if len(st.session_state.blockchain.chain) > 1:
+        # Tamper with the blockchain data
+        tamper_index = st.number_input("Enter the index of the block to tamper with", min_value=1, max_value=len(st.session_state.blockchain.chain)-1, value=1)
+        tampered_data = st.text_input("Enter new data for the tampered block")
 
-    if st.button("Authenticate"):
-        if username == valid_username and password == valid_password:
-            # Display blockchain data only if authentication is successful
-            for blockchainData, timestamp, block_hash, prev_hash in st.session_state.blockchain.get_blocks():
-                st.write(f"Blockchain data :\n\n {blockchainData}")
-                st.write(f"Timestamp : {timestamp}")
-                st.write(f"Hash : {block_hash}")
-                st.write(f"Previous Hash : {prev_hash or 'None'}")
-                st.write("-----")  # Separator for each block
-        else:
-            st.error("Authentication failed. Please check your username and password.")
+        if st.button("Tamper with Block"):
+            st.session_state.blockchain.tamper_block(tamper_index, tampered_data)
+            st.write(f"Block at index {tamper_index} has been tampered with.")
+
+        if st.button("Verify Blockchain Integrity"):
+            start_time = time.perf_counter()
+            integrity_status = st.session_state.blockchain.verify_integrity()
+            
+            if integrity_status:
+                st.success("Blockchain integrity is intact.")
+            else:
+                st.error("Blockchain integrity has been compromised.")
+            
+            end_time = time.perf_counter()
+            verification_time = end_time - start_time
+            st.session_state.verification_times.append(verification_time)
+            
+            st.write(f"Time taken to verify blockchain integrity: {verification_time:.6f} seconds")
+    else:
+        st.write("Not enough blocks to tamper with. Please add more blocks to the blockchain.")
+
+# Function to view verification times
+def view_verification_times():
+    st.header("View Verification Times")
+
+    if not st.session_state.verification_times:
+        st.info("No verification execution times recorded yet.")
+    else:
+        for idy, verif_time in enumerate(st.session_state.verification_times, 1):
+            st.write(f"Vote {idy}: {verif_time:.6f} seconds")
 
 # Streamlit UI
 def main():
@@ -280,7 +318,8 @@ def main():
 
     # Menu navigation
     menu_option = st.sidebar.selectbox("Select Function",
-                                       ["Register Candidate", "Show Registered Candidates", "Vote Candidate", "View Blockchain", "Show Results", "Test Data Integrity"])
+                                       ["Register Candidate", "Show Registered Candidates", "Vote Candidate", "View Blockchain", 
+                                        "Show Results", "Test Data Integrity", "View Execution Times", "View Verification Times"])
 
     if menu_option == "Register Candidate":
         st.header("Candidate Registration")
@@ -358,6 +397,14 @@ def main():
     # Testing data integrity
     elif menu_option == "Test Data Integrity":
         test_data_integrity()
+
+    # View execution time of all votes
+    elif menu_option == "View Execution Times":
+        view_execution_times()
+
+    # View execution time of all votes
+    elif menu_option == "View Verification Times":
+        view_verification_times()
 
 if __name__ == "__main__":
     main()
